@@ -1,0 +1,13 @@
+{
+  "mqtt": {
+    "broker": "tcp://192.168.1.100:1883",
+    "username": "",
+    "password": "",
+    "client_id": "micdetector",
+    "topic_prefix": "micdetector"
+  },
+  "hostname": "",
+  "poll_interval": "2s",
+  "homeassistant_discovery": false,
+  "log_level": "info"
+}
