@@ -58,9 +58,9 @@ func NewPublisher(cfg Config, logger *slog.Logger) (*Publisher, error) {
 		opts.SetPassword(cfg.Password)
 	}
 
-	// Set a Last Will and Testament so the broker knows if we disconnect unexpectedly.
-	// We don't use LWT for device state since we publish retained messages,
-	// but it's good practice.
+	// LWT: broker publishes "offline" if we disconnect unexpectedly.
+	availTopic := p.availabilityTopic()
+	opts.SetWill(availTopic, "offline", 1, true)
 
 	p.client = pahomqtt.NewClient(opts)
 	token := p.client.Connect()
@@ -71,7 +71,28 @@ func NewPublisher(cfg Config, logger *slog.Logger) (*Publisher, error) {
 		return nil, fmt.Errorf("MQTT connect: %w", token.Error())
 	}
 
+	// Publish online status now that we're connected.
+	p.publishAvailability("online")
+
 	return p, nil
+}
+
+func (p *Publisher) availabilityTopic() string {
+	return fmt.Sprintf("%s/%s/status", p.topicPrefix, p.serialNumber)
+}
+
+func (p *Publisher) publishAvailability(payload string) {
+	topic := p.availabilityTopic()
+	token := p.client.Publish(topic, 1, true, payload)
+	if !token.WaitTimeout(5 * time.Second) {
+		p.logger.Error("availability publish timed out", "topic", topic)
+		return
+	}
+	if token.Error() != nil {
+		p.logger.Error("availability publish failed", "topic", topic, "error", token.Error())
+		return
+	}
+	p.logger.Info("published", "topic", topic, "payload", payload)
 }
 
 // Publish sends a device state update over MQTT.
@@ -137,14 +158,15 @@ func (p *Publisher) PublishHADiscovery() {
 		discoveryTopic := fmt.Sprintf("homeassistant/binary_sensor/%s/config", objectID)
 
 		payload := discoveryPayload{
-			Name:        fmt.Sprintf("%s %s", p.hostname, s.name),
-			StateTopic:  stateTopic,
-			PayloadOn:   "on",
-			PayloadOff:  "off",
-			DeviceClass: s.deviceClass,
-			UniqueID:    objectID,
-			ObjectID:    objectID,
-			Device:      deviceInfo,
+			Name:              fmt.Sprintf("%s %s", p.hostname, s.name),
+			StateTopic:        stateTopic,
+			PayloadOn:         "on",
+			PayloadOff:        "off",
+			DeviceClass:       s.deviceClass,
+			UniqueID:          objectID,
+			ObjectID:          objectID,
+			AvailabilityTopic: p.availabilityTopic(),
+			Device:            deviceInfo,
 		}
 
 		data, err := json.Marshal(payload)
@@ -166,8 +188,9 @@ func (p *Publisher) PublishHADiscovery() {
 	}
 }
 
-// Disconnect cleanly disconnects from the MQTT broker.
+// Disconnect publishes offline status and cleanly disconnects from the MQTT broker.
 func (p *Publisher) Disconnect() {
+	p.publishAvailability("offline")
 	p.client.Disconnect(1000) // wait up to 1s for in-flight messages
 	p.logger.Info("MQTT disconnected")
 }

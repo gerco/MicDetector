@@ -1,0 +1,39 @@
+version: 2
+
+gitea_urls:
+  api: https://git.dries.info/api/v1
+  download: https://git.dries.info
+
+builds:
+  - id: micdetector
+    binary: micdetector
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - arm64
+      - amd64
+    ldflags:
+      - -s -w
+
+archives:
+  - id: micdetector
+    formats: [tar.gz]
+    name_template: "micdetector_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - DESIGN.md
+      - config.example.json
+      - com.micdetector.plist
+      - justfile
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+
+release:
+  gitea:
+    owner: gerco
+    name: MicDetector
