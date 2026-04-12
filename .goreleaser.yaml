@@ -1,9 +1,5 @@
 version: 2
 
-gitea_urls:
-  api: https://git.dries.info/api/v1
-  download: https://git.dries.info
-
 builds:
   - id: micdetector
     binary: micdetector
@@ -34,6 +30,6 @@ changelog:
   sort: asc
 
 release:
-  gitea:
+  github:
     owner: gerco
     name: MicDetector

@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: macos-latest
@@ -19,12 +22,9 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install GoReleaser
+      - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
-          install-only: true
-
-      - name: Run GoReleaser
-        run: goreleaser release --clean
+          args: release --clean
         env:
-          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
