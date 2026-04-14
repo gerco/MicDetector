@@ -14,23 +14,24 @@ Last Will and Testament, so Home Assistant knows when the machine goes offline.
 ## Requirements
 
 - macOS (uses Apple frameworks via cgo)
-- Xcode Command Line Tools (`xcode-select --install`)
-- Go 1.21+
 - An MQTT broker
-- [just](https://github.com/casey/just) (for install/uninstall)
 
-## Quick start
+## Installation
 
 ```bash
-# Clone and build
-git clone https://git.dries.info/gerco/MicDetector.git
-cd MicDetector
-go build -o micdetector .
+brew install gerco/micdetector/micdetector
+```
 
-# Create config
-mkdir -p ~/Library/Application\ Support/MicDetector
-cp config.example.json ~/Library/Application\ Support/MicDetector/config.json
-# Edit config.json — set mqtt.broker at minimum
+Edit the config — set `mqtt.broker` at minimum:
+
+```bash
+edit ~/Library/Application\ Support/MicDetector/config.json
+```
+
+Start as a background service:
+
+```bash
+brew services start micdetector
 ```
 
 ## Configuration
@@ -73,28 +74,28 @@ auto-discovery configs, and the sensors will appear in Home Assistant
 automatically. Availability tracking is included — sensors show as
 "unavailable" when the machine is offline.
 
-## Installation
+## Viewing logs
 
-Use [just](https://github.com/casey/just) to install as a launchd user agent
-(runs when you're logged in, restarts automatically):
+MicDetector logs to Apple's unified logging system:
 
 ```bash
-just install
+log stream --predicate 'subsystem == "com.micdetector"' --style compact
 ```
 
-This will:
-- Build the binary
-- Copy it to `~/bin/micdetector`
-- Install the config (if it doesn't exist yet)
-- Install and load a launchd agent
+## Development
 
-Other commands:
+Requires Go 1.21+ and Xcode Command Line Tools (`xcode-select --install`).
+
+A [justfile](https://github.com/casey/just) is included for development:
 
 ```bash
+just build      # Build the binary
+just install    # Build, install, and start as launchd agent
 just restart    # Rebuild and restart
 just uninstall  # Stop and remove (keeps config)
 just status     # Check if running
-just logs       # Tail the log file
+just logs       # View recent logs
+just logs-stream # Stream logs in real time
 ```
 
 ## macOS permissions
