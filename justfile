@@ -9,17 +9,10 @@ config_dir := home_dir / "Library" / "Application Support" / "MicDetector"
 build:
     go build -o micdetector .
 
-# Install binary, config, and launchd agent
+# Install binary and launchd agent
 install: build
     mkdir -p "{{bin_dir}}"
     cp micdetector "{{binary}}"
-    mkdir -p "{{config_dir}}"
-    @if [ ! -f "{{config_dir}}/config.json" ]; then \
-        cp config.example.json "{{config_dir}}/config.json"; \
-        echo "Installed example config to {{config_dir}}/config.json — edit it with your MQTT broker address"; \
-    else \
-        echo "Config already exists at {{config_dir}}/config.json, not overwriting"; \
-    fi
     @sed "s|__BINARY__|{{binary}}|g" com.micdetector.plist > "{{plist_dest}}"
     launchctl load "{{plist_dest}}"
     @echo "MicDetector installed and running"

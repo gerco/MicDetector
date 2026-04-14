@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -40,11 +41,36 @@ func DefaultConfigPath() string {
 	return filepath.Join(home, "Library", "Application Support", "MicDetector", "config.json")
 }
 
+// ErrNotConfigured is returned when the config file was just created and
+// the user needs to edit it before the application can start.
+var ErrNotConfigured = errors.New("not configured")
+
+const defaultConfig = `{
+  "mqtt": {
+    "broker": "",
+    "username": "",
+    "password": ""
+  },
+  "homeassistant_discovery": false
+}
+`
+
 // Load reads the config file at path and returns a Config with defaults applied.
+// If the file does not exist, it creates a default config and returns ErrNotConfigured.
+// If the file exists but mqtt.broker is empty, it also returns ErrNotConfigured.
 func Load(path string) (*Config, error) {
 	cfg := &Config{}
 
 	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			return nil, fmt.Errorf("creating config directory: %w", err)
+		}
+		if err := os.WriteFile(path, []byte(defaultConfig), 0644); err != nil {
+			return nil, fmt.Errorf("writing default config: %w", err)
+		}
+		return nil, ErrNotConfigured
+	}
 	if err != nil {
 		return nil, fmt.Errorf("reading config file: %w", err)
 	}
@@ -54,7 +80,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	if cfg.MQTT.Broker == "" {
-		return nil, fmt.Errorf("mqtt.broker is required")
+		return nil, ErrNotConfigured
 	}
 
 	// Apply defaults.

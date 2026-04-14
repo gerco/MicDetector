@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -29,6 +30,18 @@ func main() {
 	}
 
 	cfg, err := config.Load(*configPath)
+	if errors.Is(err, config.ErrNotConfigured) {
+		fmt.Fprintf(os.Stderr, `MicDetector is not configured yet.
+
+Edit the config file to set your MQTT broker address:
+  %s
+
+Then restart the service:
+  brew services restart micdetector
+
+`, *configPath)
+		os.Exit(0)
+	}
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
 		os.Exit(1)

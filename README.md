@@ -20,18 +20,15 @@ Last Will and Testament, so Home Assistant knows when the machine goes offline.
 
 ```bash
 brew install gerco/micdetector/micdetector
-```
-
-Edit the config — set `mqtt.broker` at minimum:
-
-```bash
-edit ~/Library/Application\ Support/MicDetector/config.json
-```
-
-Start as a background service:
-
-```bash
 brew services start micdetector
+```
+
+On first start, MicDetector creates a default config file and stops.
+Edit it to set your MQTT broker address, then restart:
+
+```bash
+$EDITOR ~/Library/Application\ Support/MicDetector/config.json
+brew services restart micdetector
 ```
 
 ## Configuration
