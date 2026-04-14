@@ -41,9 +41,7 @@ brews:
       bin.install "micdetector"
     service: |
       run [opt_bin/"micdetector"]
-      keep_alive true
-      log_path var/"log/micdetector.log"
-      error_log_path var/"log/micdetector.log"
+      keep_alive successful_exit: false
     caveats: |
       MicDetector requires microphone and camera permissions.
       Grant access in System Settings > Privacy & Security on first run.
@@ -53,6 +51,9 @@ brews:
 
       To start as a background service:
         brew services start micdetector
+
+      To view logs:
+        log stream --predicate 'subsystem == "com.micdetector"' --style compact
     test: |
       assert_match version.to_s, shell_output("#{bin}/micdetector -version")
 
