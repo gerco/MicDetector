@@ -47,6 +47,11 @@ int IsCameraActive() {
         return 0;
     }
 
+    // Recalculate device count from actual bytes returned.
+    // Devices may have been added or removed between GetPropertyDataSize
+    // and GetPropertyData (e.g. Thunderbolt dock disconnect).
+    deviceCount = dataUsed / sizeof(CMIODeviceID);
+
     int result = 0;
 
     for (UInt32 i = 0; i < deviceCount; i++) {

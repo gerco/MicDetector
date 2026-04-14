@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -11,12 +12,21 @@ import (
 
 	"micdetector/config"
 	"micdetector/detector"
+	"micdetector/logging"
 	"micdetector/mqtt"
 )
 
+var version = "dev"
+
 func main() {
+	showVersion := flag.Bool("version", false, "print version and exit")
 	configPath := flag.String("config", config.DefaultConfigPath(), "path to config file")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version)
+		os.Exit(0)
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -39,9 +49,7 @@ func main() {
 		level = slog.LevelInfo
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: level,
-	}))
+	logger := slog.New(logging.NewHandler("com.micdetector", "default", level))
 
 	logger.Info("starting micdetector",
 		"hostname", cfg.Hostname,

@@ -3,6 +3,7 @@ package detector
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 )
 
@@ -56,24 +57,64 @@ func (d *Detector) Run(ctx context.Context) {
 	}
 }
 
+// pollTimeout is how long to wait for a single device check before giving up.
+// CoreAudio/CoreMediaIO calls can hang when devices are being added/removed.
+const pollTimeout = 5 * time.Second
+
+// boolWithTimeout runs fn in a goroutine and returns its result.
+// If fn doesn't return within timeout, it returns (false, false).
+// The goroutine is left running — this is acceptable because hung
+// CoreAudio/CoreMediaIO calls typically unblock once device topology settles.
+func boolWithTimeout(fn func() bool, timeout time.Duration) (result bool, ok bool) {
+	ch := make(chan bool, 1)
+	go func() {
+		ch <- fn()
+	}()
+	select {
+	case v := <-ch:
+		return v, true
+	case <-time.After(timeout):
+		return false, false
+	}
+}
+
 func (d *Detector) poll(forcePublish bool) {
-	micOn := IsMicrophoneOn()
-	camOn := IsCameraOn()
+	// Run both checks concurrently with a timeout each.
+	var micOn, camOn bool
+	var micOk, camOk bool
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		micOn, micOk = boolWithTimeout(IsMicrophoneOn, pollTimeout)
+	}()
+	go func() {
+		defer wg.Done()
+		camOn, camOk = boolWithTimeout(IsCameraOn, pollTimeout)
+	}()
+	wg.Wait()
+
+	if !micOk {
+		d.logger.Warn("microphone check timed out, skipping poll cycle")
+	}
+	if !camOk {
+		d.logger.Warn("camera check timed out, skipping poll cycle")
+	}
 
 	current := State{
 		MicrophoneOn: micOn,
 		CameraOn:     camOn,
 	}
 
-	if forcePublish || current.MicrophoneOn != d.prev.MicrophoneOn {
+	if micOk && (forcePublish || current.MicrophoneOn != d.prev.MicrophoneOn) {
 		d.logger.Debug("microphone state", "on", micOn)
 		d.onChange("microphone", micOn)
+		d.prev.MicrophoneOn = current.MicrophoneOn
 	}
 
-	if forcePublish || current.CameraOn != d.prev.CameraOn {
+	if camOk && (forcePublish || current.CameraOn != d.prev.CameraOn) {
 		d.logger.Debug("camera state", "on", camOn)
 		d.onChange("camera", camOn)
+		d.prev.CameraOn = current.CameraOn
 	}
-
-	d.prev = current
 }

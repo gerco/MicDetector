@@ -11,7 +11,7 @@ builds:
       - arm64
       - amd64
     ldflags:
-      - -s -w
+      - -s -w -X main.version={{ .Version }}
 
 archives:
   - id: micdetector
@@ -20,14 +20,41 @@ archives:
     files:
       - DESIGN.md
       - config.example.json
-      - com.micdetector.plist
-      - justfile
 
 checksum:
   name_template: "checksums.txt"
 
 changelog:
   sort: asc
+
+brews:
+  - name: micdetector
+    repository:
+      owner: gerco
+      name: homebrew-micdetector
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/gerco/MicDetector"
+    description: "Publishes macOS microphone and camera status over MQTT"
+    license: "MIT"
+    install: |
+      bin.install "micdetector"
+    service: |
+      run [opt_bin/"micdetector"]
+      keep_alive true
+      log_path var/"log/micdetector.log"
+      error_log_path var/"log/micdetector.log"
+    caveats: |
+      MicDetector requires microphone and camera permissions.
+      Grant access in System Settings > Privacy & Security on first run.
+
+      To configure, edit:
+        ~/Library/Application Support/MicDetector/config.json
+
+      To start as a background service:
+        brew services start micdetector
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/micdetector -version")
 
 release:
   github:

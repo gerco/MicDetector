@@ -12,10 +12,9 @@
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/tmp/micdetector.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/micdetector.log</string>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
 </dict>
 </plist>

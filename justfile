@@ -42,6 +42,14 @@ restart: build
 status:
     @launchctl list | grep micdetector || echo "Not running"
 
-# View logs
+# View recent logs
 logs:
-    @tail -50 /tmp/micdetector.log 2>/dev/null || echo "No log file yet"
+    log show --predicate 'subsystem == "com.micdetector"' --last 5m --style compact
+
+# Stream logs in real time
+logs-stream:
+    log stream --predicate 'subsystem == "com.micdetector"' --style compact
+
+# Stream logs including debug level
+logs-debug:
+    log stream --predicate 'subsystem == "com.micdetector"' --level debug --style compact
