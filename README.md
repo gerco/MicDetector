@@ -19,7 +19,7 @@ Last Will and Testament, so Home Assistant knows when the machine goes offline.
 ## Installation
 
 ```bash
-brew install gerco/micdetector/micdetector
+brew install gerco/tap/micdetector
 brew services start micdetector
 ```
 

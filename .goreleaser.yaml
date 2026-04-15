@@ -30,7 +30,7 @@ brews:
   - name: micdetector
     repository:
       owner: gerco
-      name: homebrew-micdetector
+      name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
     homepage: "https://github.com/gerco/MicDetector"
