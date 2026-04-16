@@ -1,0 +1,64 @@
+version: 2
+
+# Darwin/macOS specific configuration
+builds:
+  - id: micdetector-darwin
+    binary: micdetector
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - arm64
+      - amd64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: micdetector-darwin
+    formats: [tar.gz]
+    name_template: "micdetector_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - config.example.json
+
+checksum:
+  name_template: "checksums.txt"
+  disable: true  # Merged by the final release
+
+changelog:
+  sort: asc
+  disable: true  # Only generate in merge job
+
+# Homebrew formula - macOS only
+brews:
+  - name: micdetector
+    repository:
+      owner: gerco
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/gerco/MicDetector"
+    description: "Publishes macOS microphone and camera status over MQTT"
+    license: "MIT"
+    install: |
+      bin.install "micdetector"
+    service: |
+      run [opt_bin/"micdetector"]
+      keep_alive successful_exit: false
+    caveats: |
+      On first start, MicDetector creates a default config file at:
+        ~/Library/Application Support/MicDetector/config.json
+
+      Edit it to set your MQTT broker address, then restart:
+        brew services restart micdetector
+
+      MicDetector requires microphone and camera permissions.
+      Grant access in System Settings > Privacy & Security on first run.
+
+      To view logs:
+        log stream --predicate 'subsystem == "com.micdetector"' --style compact
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/micdetector -version")
+
+release:
+  disable: true  # Will be merged in final job

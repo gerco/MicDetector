@@ -1,3 +1,5 @@
 micdetector
+micdetector.exe
 dist/
 .claude/
+.idea/

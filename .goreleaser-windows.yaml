@@ -1,0 +1,66 @@
+version: 2
+
+# Windows specific configuration
+builds:
+  - id: micdetector-windows
+    binary: micdetector
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - windows
+    goarch:
+      - amd64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: micdetector-windows
+    formats: [zip]
+    name_template: "micdetector_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - config.example.json
+
+checksum:
+  name_template: "checksums.txt"
+  disable: true  # Merged by the final release
+
+changelog:
+  sort: asc
+  disable: true  # Only generate in merge job
+
+# Windows Package Manager support (future)
+# winget:
+#   - name: micdetector
+#     publisher: gerco
+#     short_description: "Publishes microphone and camera status over MQTT"
+#     license: "MIT"
+#     publisher_url: "https://github.com/gerco"
+#     publisher_support_url: "https://github.com/gerco/MicDetector/issues"
+#     package_identifier: "Gerco.MicDetector"
+#     repository:
+#       owner: gerco
+#       name: winget-pkgs
+#       branch: master
+#       token: "{{ .Env.WINGET_TOKEN }}"
+#     commit_author:
+#       name: "Gerco"  
+#       email: "gerco@example.com"
+#     homepage: "https://github.com/gerco/MicDetector"
+#     description: "Publishes microphone and camera status over MQTT"
+#     release_notes: "{{ .ReleaseNotes }}"
+
+# scoop:
+#   - folder: bucket
+#     repository:
+#       owner: gerco
+#       name: scoop-bucket
+#       token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
+#     commit_author:
+#       name: "Gerco"
+#       email: "gerco@example.com"
+#     homepage: "https://github.com/gerco/MicDetector"
+#     description: "Publishes microphone and camera status over MQTT"
+#     license: MIT
+
+release:
+  disable: true  # Will be merged in final job

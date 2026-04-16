@@ -7,10 +7,19 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
-  release:
-    runs-on: macos-latest
+  # Build phase: Each runner builds for its platform
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            config: .goreleaser-darwin.yaml
+          - os: windows-latest
+            config: .goreleaser-windows.yaml
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,10 +31,56 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Run GoReleaser
+      - name: Run GoReleaser (Build)
         uses: goreleaser/goreleaser-action@v6
         with:
-          args: release --clean
+          args: release --clean --split --config=${{ matrix.config }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      # Upload partial artifacts for merge job
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: goreleaser-${{ matrix.os }}
+          path: dist/
+          retention-days: 1
+
+  # Merge phase: Combine all partial releases into one
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Download all platform artifacts
+      - name: Download Darwin Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: goreleaser-macos-latest
+          path: dist/
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: goreleaser-windows-latest
+          path: dist/
+
+      - name: Run GoReleaser (Merge)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          args: release --clean --merge
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          # SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}

@@ -31,15 +31,7 @@ func main() {
 
 	cfg, err := config.Load(*configPath)
 	if errors.Is(err, config.ErrNotConfigured) {
-		fmt.Fprintf(os.Stderr, `MicDetector is not configured yet.
-
-Edit the config file to set your MQTT broker address:
-  %s
-
-Then restart the service:
-  brew services restart micdetector
-
-`, *configPath)
+		fmt.Fprintf(os.Stderr, "MicDetector is not configured yet.\n\nEdit the config file to set your MQTT broker address:\n  %s\n\nThen restart the application.\n\n", *configPath)
 		os.Exit(0)
 	}
 	if err != nil {

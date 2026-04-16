@@ -1,12 +1,11 @@
-//go:build darwin
+//go:build windows
 
 package detector
 
 /*
-#cgo LDFLAGS: -framework CoreAudio
-#include <stdlib.h>
+#cgo LDFLAGS: -lole32
 
-extern int IsMicrophoneActive();
+extern int IsMicrophoneActive(void);
 */
 import "C"
 

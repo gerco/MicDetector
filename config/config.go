@@ -1,3 +1,5 @@
+//go:build darwin || windows
+
 package config
 
 import (
@@ -28,17 +30,8 @@ type Config struct {
 
 	// Parsed poll interval (not from JSON).
 	PollDuration time.Duration `json:"-"`
-	// Serial number of the Mac, used as a stable device identifier.
+	// Serial number of the device, used as a stable device identifier.
 	SerialNumber string `json:"-"`
-}
-
-// DefaultConfigPath returns ~/Library/Application Support/MicDetector/config.json.
-func DefaultConfigPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "config.json"
-	}
-	return filepath.Join(home, "Library", "Application Support", "MicDetector", "config.json")
 }
 
 // ErrNotConfigured is returned when the config file was just created and
