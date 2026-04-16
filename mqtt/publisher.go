@@ -49,6 +49,7 @@ func NewPublisher(cfg Config, logger *slog.Logger) (*Publisher, error) {
 		}).
 		SetOnConnectHandler(func(_ pahomqtt.Client) {
 			logger.Info("MQTT connected", "broker", cfg.Broker)
+			p.publishAvailability("online")
 		})
 
 	if cfg.Username != "" {
@@ -70,9 +71,6 @@ func NewPublisher(cfg Config, logger *slog.Logger) (*Publisher, error) {
 	if token.Error() != nil {
 		return nil, fmt.Errorf("MQTT connect: %w", token.Error())
 	}
-
-	// Publish online status now that we're connected.
-	p.publishAvailability("online")
 
 	return p, nil
 }
@@ -118,14 +116,14 @@ func (p *Publisher) Publish(device string, on bool) {
 
 // discoveryPayload is the JSON structure for Home Assistant MQTT discovery.
 type discoveryPayload struct {
-	Name              string `json:"name"`
-	StateTopic        string `json:"state_topic"`
-	PayloadOn         string `json:"payload_on"`
-	PayloadOff        string `json:"payload_off"`
-	DeviceClass       string `json:"device_class,omitempty"`
-	UniqueID          string `json:"unique_id"`
-	ObjectID          string `json:"object_id"`
-	AvailabilityTopic string `json:"availability_topic,omitempty"`
+	Name              string    `json:"name"`
+	StateTopic        string    `json:"state_topic"`
+	PayloadOn         string    `json:"payload_on"`
+	PayloadOff        string    `json:"payload_off"`
+	DeviceClass       string    `json:"device_class,omitempty"`
+	UniqueID          string    `json:"unique_id"`
+	ObjectID          string    `json:"object_id"`
+	AvailabilityTopic string    `json:"availability_topic,omitempty"`
 	Device            *haDevice `json:"device,omitempty"`
 }
 
