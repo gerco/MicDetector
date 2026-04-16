@@ -63,7 +63,7 @@ release:
   github:
     owner: gerco
     name: MicDetector
-  draft: false
+  draft: true  # Start as draft to test before publishing
   prerelease: auto
   mode: replace
   header: |

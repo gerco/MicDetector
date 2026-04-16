@@ -1,0 +1,80 @@
+name: Release (Test - No Publish)
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_homebrew:
+        description: 'Skip Homebrew publish (safe for testing)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            config: .goreleaser-darwin.yaml
+          - os: windows-latest
+            config: .goreleaser-windows.yaml
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run GoReleaser (Build Only)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          args: release --clean --split --config=${{ matrix.config }} --skip=brews
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: goreleaser-${{ matrix.os }}
+          path: dist/
+          retention-days: 1
+
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Download Darwin Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: goreleaser-macos-latest
+          path: dist/
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: goreleaser-windows-latest
+          path: dist/
+
+      - name: Run GoReleaser (Merge - Draft)
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          args: release --clean --merge --skip=brews
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
