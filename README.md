@@ -6,10 +6,19 @@ turning on a "recording" indicator light via Home Assistant.
 
 ## How it works
 
-MicDetector polls macOS CoreAudio and CoreMediaIO APIs to check if any process
-has an active audio input or video capture session. When the state changes, it
-publishes `on` or `off` to MQTT topics. It also reports availability via MQTT
-Last Will and Testament, so Home Assistant knows when the machine goes offline.
+MicDetector polls macOS CoreAudio, CoreMediaIO, and CoreGraphics APIs to
+check the state of four entities, publishing each over MQTT:
+
+- **microphone** — `on` while any process is capturing audio
+- **camera** — `on` while any process is capturing video
+- **screen_lock** — `on` while the login session reports the screen as locked
+- **idle_seconds** — integer seconds since the last input event
+
+The first three are binary; the last is a numeric sensor useful as a
+"working" signal that doesn't depend on sleep/wake.
+
+Availability is reported via MQTT Last Will and Testament, so Home Assistant
+knows when the machine goes offline.
 
 ## Requirements
 
@@ -47,18 +56,45 @@ Config lives at `~/Library/Application Support/MicDetector/config.json`.
   "hostname": "",
   "poll_interval": "2s",
   "homeassistant_discovery": false,
-  "log_level": "info"
+  "log_level": "info",
+  "entities": ["microphone", "camera", "screen_lock", "idle_seconds"]
 }
 ```
 
 Only `mqtt.broker` is required. Everything else has sensible defaults.
 
+You can edit the file directly or use the CLI. Every key is settable:
+
+```bash
+micdetector config show                                   # print current config (passwords masked)
+micdetector config get mqtt.broker
+micdetector config set mqtt.broker tcp://192.168.1.100:1883
+micdetector config set homeassistant_discovery true
+micdetector config set log_level debug
+micdetector config unset hostname                         # revert to default
+```
+
+`micdetector config --help` and `micdetector config set --help` list every
+settable key with its type and description.
+
+The enabled-entities array has its own commands:
+
+```bash
+micdetector entities list
+micdetector entities disable screen_lock idle_seconds
+micdetector entities enable screen_lock
+```
+
+`micdetector --help` lists every entity along with a one-line description.
+
 ## MQTT topics
 
 ```
-micdetector/<serial>/microphone/state   → "on" or "off"
-micdetector/<serial>/camera/state       → "on" or "off"
-micdetector/<serial>/status             → "online" or "offline"
+micdetector/<serial>/microphone/state    → "on" or "off"
+micdetector/<serial>/camera/state        → "on" or "off"
+micdetector/<serial>/screen_lock/state   → "on" or "off"
+micdetector/<serial>/idle_seconds/state  → integer (seconds)
+micdetector/<serial>/status              → "online" or "offline"
 ```
 
 The serial number is the Mac's hardware serial (lowercase), used as a stable
