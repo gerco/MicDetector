@@ -185,7 +185,7 @@ func (p *Publisher) PublishHADiscovery(flags EntityFlags) {
 
 	deviceInfo := &haDevice{
 		Identifiers: []string{fmt.Sprintf("micdetector_%s", p.serialNumber)},
-		Name:        fmt.Sprintf("MicDetector (%s)", p.hostname),
+		Name:        fmt.Sprintf("MicDetector (%s)", p.serialNumber),
 	}
 
 	for _, e := range entities {
@@ -198,7 +198,7 @@ func (p *Publisher) PublishHADiscovery(flags EntityFlags) {
 		discoveryTopic := fmt.Sprintf("homeassistant/%s/%s/config", e.component, objectID)
 
 		payload := discoveryPayload{
-			Name:              fmt.Sprintf("%s %s", p.hostname, e.displayName),
+			Name:              e.displayName,
 			StateTopic:        stateTopic,
 			DeviceClass:       e.deviceClass,
 			UnitOfMeasurement: e.unit,
