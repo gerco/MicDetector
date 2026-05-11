@@ -18,13 +18,59 @@ type MQTTConfig struct {
 	TopicPrefix string `json:"topic_prefix"`
 }
 
+// Entity describes a single publishable entity. The Available list below
+// is the single source of truth used by both the daemon and the CLI.
+type Entity struct {
+	Name        string
+	Description string
+}
+
+// Available lists every entity MicDetector knows how to publish.
+var Available = []Entity{
+	{Name: "microphone", Description: "active microphone capture (binary)"},
+	{Name: "camera", Description: "active camera capture (binary)"},
+	{Name: "screen_lock", Description: "screen is locked (binary, on=locked)"},
+	{Name: "idle_seconds", Description: "seconds since last input event (numeric)"},
+}
+
+// IsKnownEntity reports whether name appears in the Available catalog.
+func IsKnownEntity(name string) bool {
+	for _, e := range Available {
+		if e.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// EnabledEntities is the list of entity names enabled in the config.
+// A nil slice means "all available entities are enabled" (the default when
+// the config file omits the "entities" key). An empty (non-nil) slice means
+// "no entities enabled".
+type EnabledEntities []string
+
+// IsEnabled reports whether name is in the enabled set, treating nil as
+// "all enabled".
+func (e EnabledEntities) IsEnabled(name string) bool {
+	if e == nil {
+		return true
+	}
+	for _, n := range e {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
 // Config holds the full application configuration.
 type Config struct {
-	MQTT                   MQTTConfig `json:"mqtt"`
-	Hostname               string     `json:"hostname"`
-	PollInterval           string     `json:"poll_interval"`
-	HomeAssistantDiscovery bool       `json:"homeassistant_discovery"`
-	LogLevel               string     `json:"log_level"`
+	MQTT                   MQTTConfig      `json:"mqtt"`
+	Hostname               string          `json:"hostname"`
+	PollInterval           string          `json:"poll_interval"`
+	HomeAssistantDiscovery bool            `json:"homeassistant_discovery"`
+	LogLevel               string          `json:"log_level"`
+	Entities               EnabledEntities `json:"entities,omitempty"`
 
 	// Parsed poll interval (not from JSON).
 	PollDuration time.Duration `json:"-"`

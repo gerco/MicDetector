@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+
+	"github.com/spf13/cobra"
 
 	"micdetector/config"
 	"micdetector/detector"
@@ -20,16 +21,50 @@ import (
 var version = "dev"
 
 func main() {
-	showVersion := flag.Bool("version", false, "print version and exit")
-	configPath := flag.String("config", config.DefaultConfigPath(), "path to config file")
-	flag.Parse()
+	if err := newRootCmd().Execute(); err != nil {
+		os.Exit(1)
+	}
+}
 
-	if *showVersion {
-		fmt.Println(version)
-		os.Exit(0)
+func newRootCmd() *cobra.Command {
+	var configPath string
+
+	root := &cobra.Command{
+		Use:     "micdetector",
+		Short:   "Publish macOS microphone, camera, screen-lock and idle state over MQTT",
+		Long:    rootLongDescription(),
+		Version: version,
+		// Default action when no subcommand is given: run the daemon.
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return runDaemon(configPath)
+		},
+		SilenceUsage: true,
 	}
 
-	cfg, err := config.Load(*configPath)
+	root.PersistentFlags().StringVar(&configPath, "config", config.DefaultConfigPath(), "path to config file")
+
+	root.AddCommand(
+		newEntitiesCmd(&configPath),
+		newConfigCmd(&configPath),
+	)
+
+	return root
+}
+
+func rootLongDescription() string {
+	var b strings.Builder
+	b.WriteString("MicDetector polls macOS for active microphone/camera use, screen lock\n")
+	b.WriteString("state, and seconds since the last input event, then publishes the\n")
+	b.WriteString("results over MQTT for use in home automation.\n\n")
+	b.WriteString("Available entities:\n")
+	for _, e := range config.Available {
+		fmt.Fprintf(&b, "  %-13s  %s\n", e.Name, e.Description)
+	}
+	return b.String()
+}
+
+func runDaemon(configPath string) error {
+	cfg, err := config.Load(configPath)
 	if errors.Is(err, config.ErrNotConfigured) {
 		fmt.Fprintf(os.Stderr, `MicDetector is not configured yet.
 
@@ -39,30 +74,15 @@ Edit the config file to set your MQTT broker address:
 Then restart the service:
   brew services restart micdetector
 
-`, *configPath)
-		os.Exit(0)
+`, configPath)
+		return nil
 	}
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
-		os.Exit(1)
+		return err
 	}
 
-	// Set up slog with the configured level.
-	var level slog.Level
-	switch strings.ToLower(cfg.LogLevel) {
-	case "debug":
-		level = slog.LevelDebug
-	case "info":
-		level = slog.LevelInfo
-	case "warn":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
-	default:
-		level = slog.LevelInfo
-	}
-
-	logger := slog.New(logging.NewHandler("com.micdetector", "default", level))
+	logger := slog.New(logging.NewHandler("com.micdetector", "default", parseLogLevel(cfg.LogLevel)))
 
 	logger.Info("starting micdetector",
 		"hostname", cfg.Hostname,
@@ -70,7 +90,6 @@ Then restart the service:
 		"broker", cfg.MQTT.Broker,
 	)
 
-	// Connect to MQTT.
 	pub, err := mqtt.NewPublisher(mqtt.Config{
 		Broker:       cfg.MQTT.Broker,
 		Username:     cfg.MQTT.Username,
@@ -82,20 +101,35 @@ Then restart the service:
 	}, logger)
 	if err != nil {
 		logger.Error("failed to connect to MQTT broker", "error", err)
-		os.Exit(1)
+		return err
 	}
 
-	// Publish Home Assistant discovery configs if enabled.
+	flags := mqtt.EntityFlags{
+		Microphone:  cfg.Entities.IsEnabled("microphone"),
+		Camera:      cfg.Entities.IsEnabled("camera"),
+		ScreenLock:  cfg.Entities.IsEnabled("screen_lock"),
+		IdleSeconds: cfg.Entities.IsEnabled("idle_seconds"),
+	}
+
 	if cfg.HomeAssistantDiscovery {
-		pub.PublishHADiscovery()
+		pub.PublishHADiscovery(flags)
 	}
 
-	// Set up the detector with a callback that publishes state changes.
-	det := detector.New(cfg.PollDuration, func(device string, on bool) {
-		pub.Publish(device, on)
-	}, logger)
+	det := detector.New(detector.Config{
+		Interval:    cfg.PollDuration,
+		Microphone:  flags.Microphone,
+		Camera:      flags.Camera,
+		ScreenLock:  flags.ScreenLock,
+		IdleSeconds: flags.IdleSeconds,
+		OnBinaryChange: func(entity string, on bool) {
+			pub.Publish(entity, on)
+		},
+		OnNumericValue: func(entity string, value int) {
+			pub.PublishNumeric(entity, value)
+		},
+		Logger: logger,
+	})
 
-	// Start polling in a goroutine.
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -103,7 +137,6 @@ Then restart the service:
 		close(done)
 	}()
 
-	// Wait for shutdown signal.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigCh
@@ -114,4 +147,20 @@ Then restart the service:
 
 	pub.Disconnect()
 	logger.Info("shutdown complete")
+	return nil
+}
+
+func parseLogLevel(s string) slog.Level {
+	switch strings.ToLower(s) {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }

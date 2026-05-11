@@ -9,5 +9,6 @@
   "hostname": "",
   "poll_interval": "2s",
   "homeassistant_discovery": false,
-  "log_level": "info"
+  "log_level": "info",
+  "entities": ["microphone", "camera", "screen_lock", "idle_seconds"]
 }

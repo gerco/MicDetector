@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	pahomqtt "github.com/eclipse/paho.mqtt.golang"
@@ -27,6 +28,15 @@ type Config struct {
 	TopicPrefix  string
 	Hostname     string
 	SerialNumber string
+}
+
+// EntityFlags reports which entities are enabled. Only enabled entities
+// receive a discovery payload.
+type EntityFlags struct {
+	Microphone  bool
+	Camera      bool
+	ScreenLock  bool
+	IdleSeconds bool
 }
 
 // NewPublisher creates and connects an MQTT publisher.
@@ -93,15 +103,13 @@ func (p *Publisher) publishAvailability(payload string) {
 	p.logger.Info("published", "topic", topic, "payload", payload)
 }
 
-// Publish sends a device state update over MQTT.
-// device is "microphone" or "camera". on indicates whether the device is active.
-func (p *Publisher) Publish(device string, on bool) {
-	topic := fmt.Sprintf("%s/%s/%s/state", p.topicPrefix, p.serialNumber, device)
-	payload := "off"
-	if on {
-		payload = "on"
-	}
+func (p *Publisher) stateTopic(entity string) string {
+	return fmt.Sprintf("%s/%s/%s/state", p.topicPrefix, p.serialNumber, entity)
+}
 
+// publish is the shared internal publish path. quiet controls whether the
+// success log is at debug (true) or info (false) level.
+func (p *Publisher) publish(topic, payload string, quiet bool) {
 	token := p.client.Publish(topic, 1, true, payload)
 	if !token.WaitTimeout(5 * time.Second) {
 		p.logger.Error("MQTT publish timed out", "topic", topic)
@@ -111,16 +119,38 @@ func (p *Publisher) Publish(device string, on bool) {
 		p.logger.Error("MQTT publish failed", "topic", topic, "error", token.Error())
 		return
 	}
-	p.logger.Info("published", "topic", topic, "payload", payload)
+	if quiet {
+		p.logger.Debug("published", "topic", topic, "payload", payload)
+	} else {
+		p.logger.Info("published", "topic", topic, "payload", payload)
+	}
+}
+
+// Publish sends a binary entity state update over MQTT (microphone/camera/screen_lock).
+func (p *Publisher) Publish(entity string, on bool) {
+	payload := "off"
+	if on {
+		payload = "on"
+	}
+	p.publish(p.stateTopic(entity), payload, false)
+}
+
+// PublishNumeric sends a numeric entity state update over MQTT (idle_seconds).
+// Logged at debug level since this fires on every poll cycle.
+func (p *Publisher) PublishNumeric(entity string, value int) {
+	p.publish(p.stateTopic(entity), strconv.Itoa(value), true)
 }
 
 // discoveryPayload is the JSON structure for Home Assistant MQTT discovery.
+// Fields apply to either binary_sensor or sensor; unused ones are omitted.
 type discoveryPayload struct {
 	Name              string    `json:"name"`
 	StateTopic        string    `json:"state_topic"`
-	PayloadOn         string    `json:"payload_on"`
-	PayloadOff        string    `json:"payload_off"`
+	PayloadOn         string    `json:"payload_on,omitempty"`
+	PayloadOff        string    `json:"payload_off,omitempty"`
 	DeviceClass       string    `json:"device_class,omitempty"`
+	UnitOfMeasurement string    `json:"unit_of_measurement,omitempty"`
+	StateClass        string    `json:"state_class,omitempty"`
 	UniqueID          string    `json:"unique_id"`
 	ObjectID          string    `json:"object_id"`
 	AvailabilityTopic string    `json:"availability_topic,omitempty"`
@@ -133,38 +163,54 @@ type haDevice struct {
 	Manufacturer string   `json:"manufacturer,omitempty"`
 }
 
+type haEntity struct {
+	entity      string // topic segment: "microphone", "camera", "screen_lock", "idle_seconds"
+	displayName string // friendly name suffix
+	component   string // "binary_sensor" or "sensor"
+	deviceClass string
+	unit        string
+	stateClass  string
+	enabled     bool
+}
+
 // PublishHADiscovery publishes Home Assistant MQTT auto-discovery configs
-// for both the microphone and camera sensors.
-func (p *Publisher) PublishHADiscovery() {
-	sensors := []struct {
-		device      string
-		name        string
-		deviceClass string
-	}{
-		{"microphone", "Microphone", ""},
-		{"camera", "Camera", ""},
+// for each enabled entity.
+func (p *Publisher) PublishHADiscovery(flags EntityFlags) {
+	entities := []haEntity{
+		{entity: "microphone", displayName: "Microphone", component: "binary_sensor", enabled: flags.Microphone},
+		{entity: "camera", displayName: "Camera", component: "binary_sensor", enabled: flags.Camera},
+		{entity: "screen_lock", displayName: "Screen Lock", component: "binary_sensor", enabled: flags.ScreenLock},
+		{entity: "idle_seconds", displayName: "Idle Seconds", component: "sensor", unit: "s", stateClass: "measurement", deviceClass: "duration", enabled: flags.IdleSeconds},
 	}
 
 	deviceInfo := &haDevice{
 		Identifiers: []string{fmt.Sprintf("micdetector_%s", p.serialNumber)},
-		Name:        fmt.Sprintf("MicDetector (%s)", p.hostname),
+		Name:        fmt.Sprintf("MicDetector (%s)", p.serialNumber),
 	}
 
-	for _, s := range sensors {
-		objectID := fmt.Sprintf("micdetector_%s_%s", p.serialNumber, s.device)
-		stateTopic := fmt.Sprintf("%s/%s/%s/state", p.topicPrefix, p.serialNumber, s.device)
-		discoveryTopic := fmt.Sprintf("homeassistant/binary_sensor/%s/config", objectID)
+	for _, e := range entities {
+		if !e.enabled {
+			continue
+		}
+
+		objectID := fmt.Sprintf("micdetector_%s_%s", p.serialNumber, e.entity)
+		stateTopic := p.stateTopic(e.entity)
+		discoveryTopic := fmt.Sprintf("homeassistant/%s/%s/config", e.component, objectID)
 
 		payload := discoveryPayload{
-			Name:              fmt.Sprintf("%s %s", p.hostname, s.name),
+			Name:              e.displayName,
 			StateTopic:        stateTopic,
-			PayloadOn:         "on",
-			PayloadOff:        "off",
-			DeviceClass:       s.deviceClass,
+			DeviceClass:       e.deviceClass,
+			UnitOfMeasurement: e.unit,
+			StateClass:        e.stateClass,
 			UniqueID:          objectID,
 			ObjectID:          objectID,
 			AvailabilityTopic: p.availabilityTopic(),
 			Device:            deviceInfo,
+		}
+		if e.component == "binary_sensor" {
+			payload.PayloadOn = "on"
+			payload.PayloadOff = "off"
 		}
 
 		data, err := json.Marshal(payload)
