@@ -117,7 +117,7 @@ log stream --predicate 'subsystem == "com.micdetector"' --style compact
 
 ## Development
 
-Requires Go 1.21+ and Xcode Command Line Tools (`xcode-select --install`).
+Requires Go 1.27+ and Xcode Command Line Tools (`xcode-select --install`).
 
 A [justfile](https://github.com/casey/just) is included for development:
 
